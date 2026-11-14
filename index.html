@@ -79,7 +79,12 @@
   .tab svg{width:15px;height:15px;}
   .tab[aria-checked="true"]{background:var(--card);color:var(--fg);box-shadow:var(--shadow);}
   @media (max-width:420px){ .tab svg{display:none;} }
-  .mode-desc{margin-top:10px;}
+  .tabs.two{grid-template-columns:1fr 1fr;margin:0 0 20px;}
+  .tab[aria-selected="true"]{background:var(--card);color:var(--fg);box-shadow:var(--shadow);}
+  .facts{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:8px;}
+  .facts li{display:flex;gap:10px;align-items:flex-start;font-size:.92rem;}
+  .facts li svg{width:16px;height:16px;margin-top:3px;color:var(--muted-fg);}
+  .rules{margin-top:0;}
 
   /* wybór lekcji */
   .row-between{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;}
@@ -234,31 +239,38 @@
 
   <!-- START -->
   <section id="start-screen" class="card">
-    <p class="label">Jak chcesz ćwiczyć?</p>
-    <div class="tabs" role="radiogroup" aria-label="Tryb sprawdzianu" id="mode-tabs"></div>
-    <p class="desc mode-desc" id="mode-desc"></p>
+    <div class="tabs two" role="tablist" aria-label="Co chcesz zrobić?">
+      <button class="tab" role="tab" id="tab-test" aria-controls="panel-test" data-tab="test">Sprawdzian</button>
+      <button class="tab" role="tab" id="tab-topic" aria-controls="panel-topic" data-tab="topic">Ćwicz temat</button>
+    </div>
+
+    <div id="panel-test" role="tabpanel" aria-labelledby="tab-test" class="panel">
+      <p class="label">Sprawdzian z całego rozdziału</p>
+      <ul class="facts" id="test-facts"></ul>
+      <div class="actions">
+        <button id="full-btn" class="btn btn-primary">Rozpocznij sprawdzian</button>
+      </div>
+    </div>
+
+    <div id="panel-topic" role="tabpanel" aria-labelledby="tab-topic" class="panel" hidden>
+      <div class="row-between">
+        <div>
+          <p class="label">Co chcesz sprawdzić?</p>
+          <p class="desc">Zaznacz jeden albo kilka tematów. Bez limitu czasu.</p>
+        </div>
+        <div class="small"><button class="btn-link" id="pick-all">wszystkie</button> · <button class="btn-link" id="pick-none">żadne</button></div>
+      </div>
+      <div class="lessons" id="lesson-pick"></div>
+      <div class="actions">
+        <button id="start-btn" class="btn btn-primary"></button>
+      </div>
+    </div>
 
     <hr class="sep">
-
-    <div class="row-between">
-      <div>
-        <p class="label">Tematy</p>
-        <p class="desc">Wybierz, z których lekcji mają być pytania.</p>
-      </div>
-      <div class="small"><button class="btn-link" id="pick-all">wszystkie</button> · <button class="btn-link" id="pick-none">żadne</button></div>
-    </div>
-    <div class="lessons" id="lesson-pick"></div>
-
     <ul class="rules">
+      <li>Raz wybierasz odpowiedź, a raz wpisujesz ją z pamięci.</li>
       <li>Gdy wpisujesz odpowiedź, liczy się dobre słowo. Za brak polskich znaków albo jedną literówkę dostajesz pół punktu.</li>
-      <li>Pytania oznaczone <b>„Sprawdź wiedzę”</b> to zadania z podręcznika (s. 88–90).</li>
     </ul>
-
-    <div class="actions">
-      <button id="start-btn" class="btn btn-primary"></button>
-      <button id="full-btn" class="btn btn-outline"></button>
-    </div>
-    <p class="desc" id="full-info" style="margin-top:10px"></p>
     <div style="margin-top:14px"><span class="badge" id="ai-pill"><span class="dot"></span><span>Sprawdzam, czy AI może oceniać odpowiedzi…</span></span></div>
   </section>
 
@@ -304,7 +316,7 @@
     <div class="actions">
       <button id="retry-wrong-btn" class="btn btn-primary"></button>
       <button id="again-btn" class="btn btn-outline"></button>
-      <button id="settings-btn" class="btn btn-ghost">Zmień ustawienia</button>
+      <button id="settings-btn" class="btn btn-ghost">Wróć do menu</button>
     </div>
   </section>
 
@@ -1328,17 +1340,11 @@ add({ lesson:8, kind:'recall', pair:'b7', book:'s. 90, zad. 7',
 /* =========================================================
    STEROWANIE
    ========================================================= */
-const MODES = {
-  mixed:  {label:'Mieszany', icon:ICON.mix, desc:'Każde zagadnienie dostajesz w jednej z dwóch wersji: albo wybierasz odpowiedź, albo wpisujesz ją z pamięci.'},
-  recog:  {label:'Rozpoznaję', icon:ICON.eye, desc:'Wybierasz z podanych odpowiedzi, sortujesz i układasz kolejność. Dobre na pierwszą powtórkę.'},
-  recall: {label:'Przypominam', icon:ICON.pen, desc:'Wpisujesz odpowiedzi z pamięci, bez podpowiedzi. To trudniejsze, ale wtedy wiedza zostaje w głowie na dłużej.'}
-};
-const KIND_LABEL = { recog:{t:'Rozpoznawanie', i:ICON.eye}, recall:{t:'Przypominanie', i:ICON.pen} };
+// Każde zagadnienie losuje jedną ze swoich wersji: rozpoznawanie (wybór) albo przypominanie (wpisywanie).
+const KIND_LABEL = { recog:{t:'Wybieranie odpowiedzi', i:ICON.eye}, recall:{t:'Pisanie z pamięci', i:ICON.pen} };
 const PRAISE=['Świetnie!','Brawo!','Dokładnie tak!','Super!','Tak jest!','Jak prawdziwy przyrodnik!'];
 const FULL_MINUTES=30, FULL_PER_LESSON=2;
-
-let mode = 'mixed';
-try{ const m=localStorage.getItem('przyroda2-mode'); if(MODES[m]) mode=m; }catch(e){}
+const mode = 'mixed';
 
 const state = { list:[], index:0, score:0, perLesson:{}, perKind:{recog:{ok:0,total:0},recall:{ok:0,total:0}}, review:[], answered:false, full:false, lastConfig:null };
 
@@ -1366,47 +1372,48 @@ function buildFull(){
 }
 const fullCount = ()=>{ let n=0; for(let l=1;l<LESSONS.length;l++){ const gs=GROUPS.filter(g=>g[0].lesson===l); n+=gs.filter(g=>g[0].book).length+Math.min(FULL_PER_LESSON,gs.filter(g=>!g[0].book).length); } return n; };
 
-// tryb
-const tabs=$('mode-tabs');
-Object.entries(MODES).forEach(([k,m])=>{
-  const b=document.createElement('button'); b.className='tab'; b.setAttribute('role','radio'); b.dataset.mode=k;
-  b.innerHTML=`${m.icon}<span>${m.label}</span>`;
-  b.onclick=()=>{ mode=k; try{ localStorage.setItem('przyroda2-mode',k); }catch(e){} refreshMode(); };
-  tabs.appendChild(b);
-});
-tabs.addEventListener('keydown',e=>{
-  if(!['ArrowLeft','ArrowRight'].includes(e.key)) return;
-  const keys=Object.keys(MODES), i=keys.indexOf(mode), j=(i+(e.key==='ArrowRight'?1:-1)+keys.length)%keys.length;
-  mode=keys[j]; refreshMode(); tabs.querySelector(`[data-mode="${mode}"]`).focus();
-});
+const plural = n => n===1?'pytanie':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?'pytania':'pytań';
 
-// lekcje
+// zakładki: Sprawdzian / Ćwicz temat
+let tab='test';
+try{ if(localStorage.getItem('przyroda2-tab')==='topic') tab='topic'; }catch(e){}
+const tabBtns=[...document.querySelectorAll('[role=tab]')];
+function setTab(t, focus){
+  tab=t;
+  try{ localStorage.setItem('przyroda2-tab',t); }catch(e){}
+  tabBtns.forEach(b=>{ const on=b.dataset.tab===t; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; if(on&&focus) b.focus(); });
+  $('panel-test').hidden = t!=='test';
+  $('panel-topic').hidden = t!=='topic';
+}
+tabBtns.forEach(b=>{
+  b.onclick=()=>setTab(b.dataset.tab);
+  b.onkeydown=e=>{ if(e.key==='ArrowLeft'||e.key==='ArrowRight') setTab(tab==='test'?'topic':'test', true); };
+});
+setTab(tab);
+
+$('test-facts').innerHTML=[
+  [ICON.list, `<span><b>${fullCount()} zadań</b> ze wszystkich ${LESSONS.length-1} tematów</span>`],
+  [ICON.book, '<span>wszystkie zadania ze „Sprawdź wiedzę” z podręcznika (s. 88–90)</span>'],
+  [ICON.clock, `<span>masz <b>${FULL_MINUTES} minut</b></span>`]
+].map(([i,t])=>`<li>${i}${t}</li>`).join('');
+
+// wybór tematów do ćwiczenia
 const pickEl=$('lesson-pick');
 for(let l=1;l<LESSONS.length;l++){
-  pickEl.insertAdjacentHTML('beforeend',`<label class="lesson"><input type="checkbox" value="${l}" checked><span class="num">${l}.</span><span>${LESSONS[l].name} <span class="small">· ${LESSONS[l].pages}</span></span><span class="cnt" data-l="${l}"></span></label>`);
+  const n=GROUPS.filter(g=>g[0].lesson===l).length;
+  pickEl.insertAdjacentHTML('beforeend',`<label class="lesson"><input type="checkbox" value="${l}"><span class="num">${l}.</span><span>${LESSONS[l].name} <span class="small">· ${LESSONS[l].pages}</span></span><span class="cnt">${n} pyt.</span></label>`);
 }
 const boxes=()=>[...pickEl.querySelectorAll('input')];
 const chosenLessons=()=>new Set(boxes().filter(b=>b.checked).map(b=>+b.value));
 function refreshStart(){
   const n=buildList(chosenLessons(),mode).length;
   $('start-btn').disabled = n===0;
-  $('start-btn').innerHTML=`${ICON.play}Zacznij · ${n} ${n===1?'pytanie':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?'pytania':'pytań'}`;
-}
-function refreshMode(){
-  tabs.querySelectorAll('.tab').forEach(b=>{ const on=b.dataset.mode===mode; b.setAttribute('aria-checked',on); b.tabIndex=on?0:-1; });
-  $('mode-desc').textContent=MODES[mode].desc;
-  for(let l=1;l<LESSONS.length;l++){
-    const n=GROUPS.filter(g=>g[0].lesson===l && candidates(g,mode).length).length;
-    pickEl.querySelector(`[data-l="${l}"]`).textContent=`${n} pyt.`;
-  }
-  $('full-btn').innerHTML=`${ICON.clock}Pełny sprawdzian · ${FULL_MINUTES} min`;
-  $('full-info').innerHTML=`Pełny sprawdzian to wszystkie lekcje naraz: <b>${fullCount()} zadań</b> (w tym wszystkie zadania ze „Sprawdź wiedzę”) w wybranym trybie. Masz na to ${FULL_MINUTES} minut.`;
-  refreshStart();
+  $('start-btn').innerHTML = n ? `${ICON.play}Ćwicz · ${n} ${plural(n)}` : 'Zaznacz temat';
 }
 pickEl.addEventListener('change',refreshStart);
 $('pick-all').onclick=()=>{ boxes().forEach(b=>b.checked=true); refreshStart(); };
 $('pick-none').onclick=()=>{ boxes().forEach(b=>b.checked=false); refreshStart(); };
-refreshMode();
+refreshStart();
 
 // przebieg
 let timerId=null, deadline=0;
@@ -1432,8 +1439,7 @@ function showQuestion(){
   $('progress-fill').style.width=(state.index/total*100)+'%';
   $('progress-text').textContent=`Pytanie ${state.index+1} z ${total}`;
   $('score-text').textContent=fmt(state.score);
-  const k=KIND_LABEL[q.kind];
-  $('q-meta').innerHTML=`<span class="badge">${q.lesson}. ${LESSONS[q.lesson].name}</span><span class="badge">${k.i}${k.t}</span>${q.book?`<span class="badge solid">${ICON.book}Sprawdź wiedzę · ${q.book}</span>`:''}`;
+  $('q-meta').innerHTML=`<span class="badge">${q.lesson}. ${LESSONS[q.lesson].name}</span>${q.book?`<span class="badge solid">${ICON.book}Sprawdź wiedzę · ${q.book}</span>`:''}`;
   $('feedback').innerHTML='';
   $('next-btn').hidden=true;
   const area=$('question-area'); area.innerHTML='';
@@ -1507,7 +1513,7 @@ $('next-btn').onclick=goNext;
 $('quit-btn').onclick=()=>{ if(confirm('Zakończyć sprawdzian i zobaczyć wynik?')) showResults(false); };
 $('retry-wrong-btn').onclick=()=>begin(shuffle(state.review.map(r=>r.q)),false);
 $('again-btn').onclick=()=>{ state.lastConfig?.full ? begin(buildFull(),true) : begin(buildList(chosenLessons(),mode),false); };
-$('settings-btn').onclick=()=>{ $('result-screen').hidden=true; $('start-screen').hidden=false; refreshMode(); };
+$('settings-btn').onclick=()=>{ $('result-screen').hidden=true; $('start-screen').hidden=false; refreshStart(); };
 </script>
 </body>
 </html>
